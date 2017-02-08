@@ -2,5 +2,6 @@
     "appSecret": "0fc0472aeca65143f557e876fedecc84",
     "pageAccessToken": "EAAIrPco419cBADDp2DyvC1ur79RTQHeCxmNx7ta6wH2ZCBfjtXeBvtbq4BpixtwMIRu8HftyyZB6ojGJg5UxGbwtlSSoVxBJ2ZB1ioZCCKiaYbCfeCRoedztDm4JhT5yuDtiB0RLFWZCm6VA5g3ZBSnVnXxTSoARFgLwOBvSQZAjQZDZD",
     "validationToken": "qwerty",
-    "serverURL": "https://delibotph.herokuapp.com"
+    "serverURL": "https://delibotph.herokuapp.com/",
+    "googleAPIKey": "AIzaSyCaPXvqhFdmyjb6_kpYizN4h2B46xM4Jkg"
 }

@@ -58,6 +58,13 @@ const SERVER_URL = (process.env.SERVER_URL) ?
   (process.env.SERVER_URL) :
   config.get('serverURL');
 
+const GOOGLE_KEY = (process.env.GOOGLE_KEY) ?
+  (process.env.GOOGLE_KEY) :
+  config.get('googleAPIKey');
+
+  console.log(GOOGLE_KEY);
+
+
 if (!(APP_SECRET && VALIDATION_TOKEN && PAGE_ACCESS_TOKEN && SERVER_URL)) {
   console.error("Missing config values");
   process.exit(1);
@@ -385,10 +392,98 @@ function receivedMessage(event) {
         break;
 
       default:
-        sendTextMessage(senderID, messageText);
+        var data = {
+          action:         "check_state",
+          MessengerId:    senderID,
+          Building:       messageText
+        };
+        // console.log(data);
+
+        needle.post('http://gpdigital.crabdance.com/api/v0/delibot.php', data, GlobalHeader, function(err, resp, body) {
+          if(!err){
+            console.log(resp.body);
+            var stat = JSON.parse(resp.body);
+            if(stat.status == 'ok'){
+              // sendTextMessage(senderID, stat.address);
+              buildReceipt(senderID, stat.address);
+            }
+            // sendTextMessage(senderID, "Building Info\u000A(Unit No./ Bldg. Name)");
+          }
+          else{
+            console.log('needle error');
+          }
+        });
+
+        // sendTextMessage(senderID, messageText);
     }
   } else if (messageAttachments) {
-    sendTextMessage(senderID, "Message with attachment received");
+    console.log(messageAttachments);
+    console.log(messageAttachments[0].payload.coordinates);
+    // sendTextMessage(senderID, "Message with attachment received");
+    var locationurl = 'https://maps.googleapis.com/maps/api/geocode/json?latlng='+messageAttachments[0].payload.coordinates.lat+','+messageAttachments[0].payload.coordinates.long+'&key='+GOOGLE_KEY;
+    console.log(locationurl);
+    needle.get(locationurl, function(error, response) {
+      if (!error && response.statusCode == 200){
+
+        console.log(response.body);
+        // var result = JSON.parse(response.body);
+        // console.log(result.results);
+        var result = response.body.results;
+        console.log(result);
+
+        var text = '';
+        var addr = []
+        var loc = {
+          address: ''
+        };
+        for(var i = 0; i <result[0].address_components.length; i++){
+          if(result[0].address_components[i].types[0] == 'street_number'){
+            loc.address = result[0].address_components[i].long_name;
+          }
+          if(result[0].address_components[i].types[0] == 'route'){
+            loc.address = loc.address+" "+result[0].address_components[i].long_name;
+          }
+        }
+        for(var i = 0; i <result[1].address_components.length; i++){
+          if(result[1].address_components[i].types[0] == 'neighborhood'){
+            loc.address = loc.address+", "+result[1].address_components[i].long_name;
+          }
+          if(result[1].address_components[i].types[0] == 'sub_locality'){
+            loc.address = loc.address+", "+result[1].address_components[i].long_name;
+          }
+          if(result[1].address_components[i].types[0] == 'locality'){
+            loc.address = loc.address+", "+result[1].address_components[i].long_name;
+          }
+          if(result[1].address_components[i].types[0] == 'administrative_area_level_1'){
+            loc.address = loc.address+", "+result[1].address_components[i].long_name;
+          }
+          if(result[1].address_components[i].types[0] == 'country'){
+            loc.address = loc.address+", "+result[1].address_components[i].long_name;
+          }
+        }
+
+        var data = {
+          action:         "add_address",
+          MessengerId:    senderID,
+          Address:        loc.address
+        };
+        // console.log(data);
+
+        needle.post('http://gpdigital.crabdance.com/api/v0/delibot.php', data, GlobalHeader, function(err, resp, body) {
+          if(!err){
+            console.log(resp.body);
+            sendTextMessage(senderID, "Building Info\u000A(Unit No./ Bldg. Name)");
+          }
+          else{
+            console.log('needle error');
+          }
+        });
+
+        // sendTextMessage(senderID, loc.address);
+      }
+        
+    });
+
   }
 }
 
@@ -683,7 +778,7 @@ function generateCart(senderID, cart){
   return messageData;
 }
 
-function generateReceipt(senderID, cart){
+function generateReceipt(senderID, cart, address){
   var messageData = {
     recipient: {
       id: senderID
@@ -730,57 +825,66 @@ function generateReceipt(senderID, cart){
     amount: total*0.12
   }];
 
-  // var messageData = {
-  //   recipient: {
-  //     id: senderID
-  //   },
-  //   message:{
-  //     attachment: {
-  //       type: "template",
-  //       payload: {
-  //         template_type: "receipt",
-  //         recipient_name: "Randy",
-  //         order_number: senderID,
-  //         currency: "USD",
-  //         payment_method: "Visa 1234",        
-  //         timestamp: timeOfPostback, 
-  //         address: {
-  //           street_1: "N. Domingo",
-  //           street_2: "",
-  //           city: "San Juan",
-  //           postal_code: "1500",
-  //           state: "TAC",
-  //           country: "PH"
-  //         },
-  //         summary: {
-  //           subtotal: 698.99,
-  //           shipping_cost: 20.00,
-  //           total_tax: 57.67,
-  //           total_cost: 626.66
-  //         },
-  //         adjustments: [],
-  //         elements: [{
-  //           title: "Oculus Rift",
-  //           subtitle: "Includes: headset, sensor, remote",
-  //           quantity: 1,
-  //           price: 599.00,
-  //           currency: "USD",
-  //           image_url: SERVER_URL + "/assets/riftsq.png"
-  //         }, {
-  //           title: "Samsung Gear VR",
-  //           subtitle: "Frost White",
-  //           quantity: 1,
-  //           price: 99.99,
-  //           currency: "USD",
-  //           image_url: SERVER_URL + "/assets/gearvrsq.png"
-  //         }]
-  //       }
-  //     }
-  //   }
-  // };
+  return messageData;
+}
 
+
+function generateLocation(senderID){
+  console.log('location');
+  var text;
+  text = "Location";
+
+  var messageData = {
+    recipient: {
+      id: senderID
+    },
+    message: {
+      text: text,
+      quick_replies: [{
+        "content_type":"location",
+      }]
+    }
+  };
 
   return messageData;
+}
+
+function buildReceipt(senderID, address){
+  var data = {
+    action:         "get_cart",
+    MessengerId:    senderID,
+  };
+  console.log(data);
+
+  needle.post('http://gpdigital.crabdance.com/api/v0/delibot.php', data, GlobalHeader, function(err, resp, body) {
+    if(!err){
+      console.log(body);
+      var cart = JSON.parse(resp.body);
+
+      var buttons = [];
+      var position = 0;
+
+
+      if(cart.cart.length == 0){
+        var messageData = generateText(senderID, "Cart is Empty.");
+        buttons.push(messageData);
+        position++;
+
+        var messageData = generateMenu(senderID);
+        buttons.push(messageData);
+        position++;
+      }
+      else {
+        var messageData = generateReceipt(senderID, cart.cart, address);
+        buttons.push(messageData);
+        position++;
+      }
+      callSendAPI2(buttons, 0);
+    }
+    else{
+      console.log('needle error');
+    }
+  });
 }
 
 
@@ -791,57 +895,88 @@ function processPostback(payload, senderID, senderName, timeOfPostback){
   var payload_tag = payload.split('_');
 
   if(payload == 'GET_STARTED'){
-    var buttons = [];
-    var position = 0;
-    var messageData = {
-      recipient: {
-        id: senderID
-      },
-      message: {
-        attachment: {
-          type: "template",
-          payload: {
-            template_type: "generic",
-            elements: [{
-              title: "Delivery Service",
-              subtitle: "Welcome to DeliBot.",
-              // item_url: "https://www.oculus.com/en-us/rift/",               
-              image_url: SERVER_URL + "/assets/rift.png",
-              buttons: [{
-                type: "postback",
-                title: "Delivery Menu",
-                payload: "MAIN_VIEWMENU",
-              }, {
-                type: "postback",
-                title: "Chat with a Human",
-                payload: "MAIN_CHATHUMAN",
-              }, {
-                type: "postback",
-                title: "Book a Table",
-                payload: "MAIN_BOOKTABLE",
-              }],
-            }, {
-              title: "Main Location",
-              subtitle: "Our Address.",
-              // item_url: "https://www.oculus.com/en-us/touch/",               
-              image_url: SERVER_URL + "/assets/touch.png",
-              buttons: [{
-                type: "postback",
-                title: "Get Directions",
-                payload: "ABOUT_LOCATION",
-              }, {
-                type: "postback",
-                title: "Call now",
-                payload: "ABOUT_CALLNOW",
-              }]
-            }]
+    needle.get('https://graph.facebook.com/v2.6/'+senderID+'?access_token='+PAGE_ACCESS_TOKEN, function(error, response) {
+      if (!error && response.statusCode == 200){
+        var name = response.body.first_name+" "+response.body.last_name;
+        console.log(name);
+
+        var data = {
+          action:         "add_user",
+          MessengerId:    senderID,
+          Name:           name
+        };
+        // console.log(data);
+
+        needle.post('http://gpdigital.crabdance.com/api/v0/delibot.php', data, GlobalHeader, function(err, resp, body) {
+          if(!err){
+            console.log(resp.body);
+            var buttons = [];
+            var position = 0;
+
+            var messageData = generateText(senderID, "Welcome, "+name);
+            buttons.push(messageData);
+            position++;
+
+            var messageData = {
+              recipient: {
+                id: senderID
+              },
+              message: {
+                attachment: {
+                  type: "template",
+                  payload: {
+                    template_type: "generic",
+                    elements: [{
+                      title: "Delivery Service",
+                      subtitle: "Welcome to DeliBot.",
+                      // item_url: "https://www.oculus.com/en-us/rift/",               
+                      image_url: SERVER_URL + "/assets/rift.png",
+                      buttons: [{
+                        type: "postback",
+                        title: "Delivery Menu",
+                        payload: "MAIN_VIEWMENU",
+                      }, {
+                        type: "postback",
+                        title: "Chat with a Human",
+                        payload: "MAIN_CHATHUMAN",
+                      }, {
+                        type: "postback",
+                        title: "Book a Table",
+                        payload: "MAIN_BOOKTABLE",
+                      }],
+                    }, {
+                      title: "Main Location",
+                      subtitle: "Our Address.",
+                      // item_url: "https://www.oculus.com/en-us/touch/",               
+                      image_url: SERVER_URL + "/assets/touch.png",
+                      buttons: [{
+                        type: "postback",
+                        title: "Get Directions",
+                        payload: "ABOUT_LOCATION",
+                      }, {
+                        type: "postback",
+                        title: "Call now",
+                        payload: "ABOUT_CALLNOW",
+                      }]
+                    }]
+                  }
+                }
+              }
+            };
+            buttons.push(messageData);
+            position++;
+            callSendAPI2(buttons, 0);
           }
-        }
+          else{
+            console.log('needle error');
+          }
+        });
+
+
       }
-    };
-    buttons.push(messageData);
-    position++;
-    callSendAPI2(buttons, 0);
+        // console.log(response.body);
+    });
+
   }
   else if(payload_tag[0] == 'MAIN'){
     if(payload_tag[1] == 'VIEWMENU'){
@@ -893,41 +1028,51 @@ function processPostback(payload, senderID, senderName, timeOfPostback){
  
     }
     else if(payload_tag[1] == 'PLACEORDER'){
+
       var data = {
-        action:         "get_cart",
-        MessengerId:    senderID,
+        action:         "check_address",
+        MessengerId:    senderID
       };
       console.log(data);
 
       needle.post('http://gpdigital.crabdance.com/api/v0/delibot.php', data, GlobalHeader, function(err, resp, body) {
         if(!err){
           console.log(body);
-          var cart = JSON.parse(resp.body);
+          var address = JSON.parse(resp.body);
+          if(address.address_status == 'NOT SET'){
+            var buttons = [];
+            var position = 0;
 
-          var buttons = [];
-          var position = 0;
-
-
-          if(cart.cart.length == 0){
-            var messageData = generateText(senderID, "Cart is Empty.");
+            var messageData = generateLocation(senderID);
             buttons.push(messageData);
             position++;
 
-            var messageData = generateMenu(senderID);
-            buttons.push(messageData);
-            position++;
+            callSendAPI2(buttons, 0);
           }
-          else {
-            var messageData = generateReceipt(senderID, cart.cart);
-            buttons.push(messageData);
-            position++;
+          else{
+            buildReceipt(senderID, '');
           }
-          callSendAPI2(buttons, 0);
         }
         else{
           console.log('needle error');
         }
       });
+
+
+
+      // var buttons = [];
+      // var position = 0;
+
+      // var messageData = generateLocation(senderID);
+      // buttons.push(messageData);
+      // position++;
+
+      // callSendAPI2(buttons, 0);
+
+
+
+
+      
 
     }
     else if(payload_tag[1] == 'NEWORDER'){
@@ -971,6 +1116,16 @@ function processPostback(payload, senderID, senderName, timeOfPostback){
           console.log('needle error');
         }
       });
+    }
+    else if(payload_tag[1] == 'BOOKTABLE'){
+      var buttons = [];
+      var position = 0;
+
+      var messageData = generateLocation(senderID);
+      buttons.push(messageData);
+      position++;
+
+      callSendAPI2(buttons, 0);
     }
   }
   else if(payload_tag[0] == 'MENU'){
